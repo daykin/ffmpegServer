@@ -38,7 +38,7 @@ include $(TOP)/configure/RULES
 
 $(TOP)/vendor/ffmpeg-%/ffbuild/config.mak: $(TOP)/vendor/yasm-%/yasm
 	mkdir -p $(TOP)/vendor/ffmpeg-$(*F)
-	cd $(TOP)/vendor/ffmpeg-$(*F) && export PATH=${PATH}:../yasm-$(*F) && sh ../ffmpeg/configure $(CONFIGOPTIONS) && make && make install
+	cd $(TOP)/vendor/ffmpeg-$(*F) && export PATH=$(PATH):../yasm-$(*F) && sh ../ffmpeg/configure $(CONFIGOPTIONS) && make && make install
 	$(MAKE) install
 
 $(TOP)/vendor/yasm-%/yasm:
