@@ -534,41 +534,49 @@ void ffmpegStream::processCallbacks(NDArray *pArray)
     
     /* Convert it to a jpeg */        
     this->jpeg = this->pNDArrayPool->alloc(1, &size, NDInt8, 0, NULL);
-
-    AVPacket pkt;
-    int got_output;
-    av_init_packet(&pkt);
-    pkt.data = (uint8_t*)this->jpeg->pData;    // packet data will be allocated by the encoder
-    pkt.size = c->width * c->height;
+    this->jpeg->reserve();
+    AVPacket* pkt = av_packet_alloc();
+    pkt->size = c->width * c->height;
 
     // needed to stop a stream of "AVFrame.format is not set" etc. messages
     scPicture->format = c->pix_fmt;
     scPicture->width = c->width;
     scPicture->height = c->height;
 
-    if (avcodec_encode_video2(c, &pkt, scPicture, &got_output)) {
+    int sts;
+    sts = avcodec_send_frame(c, scPicture);
+    char err[64];
+    if(sts) {
+        av_strerror(sts, err, 64*sizeof(char));
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
-            "%s:%s: Encoding jpeg failed\n",
-            driverName, functionName);
-        got_output = 0; // got_output is undefined on error, so explicitly set it for use later
+                  "%s%s: Encoding jpeg failed - %d - %s\n",
+                   driverName, functionName, sts, err);
+    
+    }
+    sts = avcodec_receive_packet(c,pkt);
+    if (sts){
+        av_strerror(sts, err, 64*sizeof(char));
+        asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
+                  "%s:%s: Recv packet failed - %d - %s\n",
+                  driverName, functionName, sts, err);
     }
 
-    if (got_output) {
-        this->jpeg->dims[0].size = pkt.size;
-        av_packet_unref(&pkt);
-    }
+    //packet is unref'd by avcodec_receive_packet automatically
+    //NDArray reservation is handled by get_jpeg
+    this->jpeg->dims[0].size = pkt->size;
+    this->jpeg->pData = pkt->data;
+    this->unlock();
 
     //printf("Frame! Size: %d\n", this->jpeg->dims[0].size);
-    
+
     /* signal fresh_frame to output plugin and unlock mutex */
     for (int i=0; i<config.server_maxconn; i++) {
         pthread_cond_signal(&(this->cond[i]));
     }
     pthread_mutex_unlock(&this->mutex);
-
     /* We must enter the loop and exit with the mutex locked */
     this->lock();
-
+    this->jpeg->release();
     /* Update the parameters.  */
     callParamCallbacks(0, 0);
 //    gettimeofday(&end, NULL);   
