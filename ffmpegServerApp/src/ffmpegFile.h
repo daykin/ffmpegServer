@@ -41,7 +41,7 @@ protected:
 
 private:
     FILE *outFile;
-    AVCodec *codec;
+    const AVCodec *codec;
     enum AVCodecID codec_id;
     AVCodecContext *c;
     AVFrame *inPicture;
@@ -53,7 +53,7 @@ private:
     int needStop;      
     int sheight, swidth;
     enum AVPixelFormat spix_fmt;
-    AVOutputFormat *fmt;
+    const AVOutputFormat *fmt;
     AVFormatContext *oc;
     AVStream *video_st;
     double video_pts;   
