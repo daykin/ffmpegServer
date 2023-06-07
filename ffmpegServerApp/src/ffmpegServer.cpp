@@ -357,7 +357,7 @@ void ffmpegStream::allocScArray(size_t size) {
     if (this->scArray) {
         if (this->scArray->dims[0].size >= size) {
             /* the processed array is already big enough */
-            avpicture_fill((AVPicture *)scPicture,(uint8_t *)scArray->pData,c->pix_fmt,c->width,c->height);               
+            av_image_fill_arrays(scPicture->data, scPicture->linesize, (uint8_t*)scArray->pData, c->pix_fmt, c->width, c->height, 1);
             return;
         } else {
             /* need a new one, so discard the old one */
@@ -366,7 +366,7 @@ void ffmpegStream::allocScArray(size_t size) {
     }
     this->scArray = this->pNDArrayPool->alloc(1, &size, NDInt8, 0, NULL);
     /* alloc in and scaled pictures */
-    avpicture_fill((AVPicture *)scPicture,(uint8_t *)scArray->pData,c->pix_fmt,c->width,c->height);   
+    av_image_fill_arrays(scPicture->data, scPicture->linesize, (uint8_t *)scArray->pData, c->pix_fmt, c->width, c->height, 1);   
 }       
     
 
