@@ -34,6 +34,7 @@ int pthread_cond_signal (pthread_cond_t *cv) {
 #endif
 
 static const char *driverName = "ffmpegServer";
+char program_name[255];
 
 /** This is called whenever a client requests a stream */
 void dorequest(int sid) {
@@ -223,7 +224,7 @@ void ffmpegServerConfigure(int port, const char* networkInterface) {
         return;
     } else printf("OK\n");
     /* Register the shutdown function for epicsAtExit */
-    epicsAtExit(c_shutdown, NULL);    
+    epicsAtExit(c_shutdown, NULL);
 }
 
 /** Internal function to send a single snapshot */
@@ -528,10 +529,6 @@ void ffmpegStream::processCallbacks(NDArray *pArray)
     pthread_mutex_lock(&this->mutex);
 
     /* Release the last jpeg created */
-    if (this->jpeg) {
-        this->jpeg->release();
-    }
-    
     /* Convert it to a jpeg */        
     this->jpeg = this->pNDArrayPool->alloc(1, &size, NDInt8, 0, NULL);
     this->jpeg->reserve();
@@ -577,6 +574,7 @@ void ffmpegStream::processCallbacks(NDArray *pArray)
     /* We must enter the loop and exit with the mutex locked */
     this->lock();
     this->jpeg->release();
+    this->pNDArrayPool->release(this->jpeg);
     /* Update the parameters.  */
     callParamCallbacks(0, 0);
 //    gettimeofday(&end, NULL);   

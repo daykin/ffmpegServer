@@ -54,7 +54,7 @@ asynStatus ffmpegFile::openFile(const char *filename, NDFileOpenMode_t openMode,
     	this->supportsMultipleArrays = 1;
         /* We want to use msmpeg4v2 instead of mpeg4 for avi files*/
         if (av_match_ext(filename, "avi") && fmt->video_codec == AV_CODEC_ID_MPEG4) {
-        	fmt->video_codec = AV_CODEC_ID_MSMPEG4V2;
+        	oc->video_codec_id = AV_CODEC_ID_MSMPEG4V2;
         }
     }
 
@@ -85,7 +85,7 @@ asynStatus ffmpegFile::openFile(const char *filename, NDFileOpenMode_t openMode,
         return(asynError);
 	}
 	video_st->id = oc->nb_streams-1;
-	c = video_st->codec;
+	c = avcodec_alloc_context3(codec);
 
 	if (codec->type != AVMEDIA_TYPE_VIDEO) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR,
@@ -94,7 +94,6 @@ asynStatus ffmpegFile::openFile(const char *filename, NDFileOpenMode_t openMode,
         return(asynError);
 	}
 
-	avcodec_get_context_defaults3(c, codec);
 	c->codec_id = codec_id;
 
     /* put sample parameters */
@@ -147,7 +146,7 @@ asynStatus ffmpegFile::openFile(const char *filename, NDFileOpenMode_t openMode,
     /* Now that all the parameters are set, we can open the audio and
      * video codecs and allocate the necessary encode buffers. */
 
-	c = video_st->codec;
+	avcodec_parameters_from_context(video_st->codecpar, c);
 
 	/* open the codec */
 	ret = avcodec_open2(c, codec, NULL);
@@ -211,7 +210,7 @@ asynStatus ffmpegFile::openFile(const char *filename, NDFileOpenMode_t openMode,
     /* alloc in and scaled pictures */
     inPicture = av_frame_alloc();
     scPicture = av_frame_alloc();
-	avpicture_fill((AVPicture *)scPicture,(uint8_t *)scArray->pData,c->pix_fmt,c->width,c->height);       
+    av_image_fill_arrays(scPicture->data, scPicture->linesize, (uint8_t *)scArray->pData, c->pix_fmt, c->width, c->height, 1);
     scPicture->pts = 0;
 	needStop = 1;
     return(asynSuccess);
@@ -246,39 +245,41 @@ asynStatus ffmpegFile::writeFile(NDArray *pArray)
 	
 
     /* encode the image */
-    AVPacket pkt;
-    int got_output;
-    av_init_packet(&pkt);
-    pkt.data = NULL;    // packet data will be allocated by the encoder
-    pkt.size = 0;
+    AVPacket* pkt = av_packet_alloc();
+    pkt->data = (uint8_t*)av_malloc(c->coded_width * c->coded_height);
+    pkt->size = c->width*c->height;
 
-    ret = avcodec_encode_video2(c, &pkt, this->scPicture, &got_output);
-    if (ret < 0) {
-        fprintf(stderr, "Error encoding video frame: %s\n", av_make_error_string(errbuf, AV_ERROR_MAX_STRING_SIZE, ret));
+    int sts;
+    sts = avcodec_send_frame(c,this->scPicture);
+    if (sts) {
+        fprintf(stderr, "Error encoding video frame: %s\n", av_make_error_string(errbuf, AV_ERROR_MAX_STRING_SIZE, sts));
         exit(1);
     }
-
+    sts = avcodec_receive_packet(c, pkt);
+    if (sts) {
+        fprintf(stderr, "Error encoding video frame: %s\n", av_make_error_string(errbuf, AV_ERROR_MAX_STRING_SIZE, sts));
+        exit(1);
+    }
     /* If size is zero, it means the image was buffered. */
-    if (got_output) {
-        if (c->coded_frame->key_frame)
-            pkt.flags |= AV_PKT_FLAG_KEY;
+    /* side data e.g. keyframe-ness is automatically kept in packet*/
+    if (!sts) {
 
-        pkt.stream_index = video_st->index;
-
+        pkt->stream_index = video_st->index;
+        av_packet_rescale_ts(pkt,c->time_base,video_st->time_base);
         /* Write the compressed frame to the media file. */
-        ret = av_interleaved_write_frame(oc, &pkt);
+        ret = av_interleaved_write_frame(oc, pkt);
     } else {
-    	printf("got_output = 0, shouldn't see this\n");
+    	printf("sts is nonzero, shouldn't see this\n");
         ret = 0;
     }
-    scPicture->pts += av_rescale_q(1, video_st->codec->time_base, video_st->time_base);
 
     if (ret != 0) {
         asynPrint(this->pasynUserSelf, ASYN_TRACE_ERROR, 
             "%s:%s Error while writing video frame\n",
             driverName2, functionName);
     }
-
+    av_free(pkt->data);
+    av_packet_free(&pkt);
     return(asynSuccess);
 }
 
@@ -309,12 +310,12 @@ asynStatus ffmpegFile::closeFile()
 
     /* close each codec */
     if (video_st) {
-	    avcodec_close(video_st->codec);
+	    avcodec_close(c);
 	}
 	
     /* free the streams */
     for(unsigned int i = 0; i < oc->nb_streams; i++) {
-        av_freep(&oc->streams[i]->codec);
+        av_freep(&oc->streams[i]->codecpar);
         av_freep(&oc->streams[i]);
     }
 
