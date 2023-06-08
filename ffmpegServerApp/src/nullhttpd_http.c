@@ -20,6 +20,13 @@
 
 #define RFC1123FMT "%a, %d %b %Y %H:%M:%S GMT"
 
+struct {
+	pthread_mutex_t Crypt;
+	pthread_mutex_t Global;
+	pthread_mutex_t SQL;
+} Lock;
+CONNECTION *conn;
+
 void printerror(int sid, int status, const char* title, const char* text)
 {
 	send_header(sid, 0, 200, "OK", "1", "text/html", -1, -1);

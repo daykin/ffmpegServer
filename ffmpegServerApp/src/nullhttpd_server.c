@@ -26,6 +26,8 @@ static SOCKET ListenSocket;
 static int ListenSocket;
 #endif
 
+CONFIG config;
+
 void logaccess(int loglevel, const char *format, ...)
 {
 	char logbuffer[1024];
@@ -486,10 +488,11 @@ void CGIkilltimer(void *x)
  ***************************************************************************/
 void init()
 {
+	struct Lock g_lock;
 	printf("%s\r\n", SERVER_NAME);
-	pthread_mutex_init(&Lock.Crypt, NULL);
-	pthread_mutex_init(&Lock.Global, NULL);
-	pthread_mutex_init(&Lock.SQL, NULL);
+	pthread_mutex_init(&g_lock.Crypt, NULL);
+	pthread_mutex_init(&g_lock.Global, NULL);
+	pthread_mutex_init(&g_lock.SQL, NULL);
 	if (config_read()!=0) {
 #ifdef WIN32
 		MessageBox(0, "Error reading configuration file", APPTITLE, MB_ICONERROR);

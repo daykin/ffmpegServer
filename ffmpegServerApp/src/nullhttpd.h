@@ -226,14 +226,15 @@ typedef struct {
 #ifdef WIN32
 HINSTANCE hInst;
 #endif
-struct {
+struct Lock {
 	pthread_mutex_t Crypt;
 	pthread_mutex_t Global;
 	pthread_mutex_t SQL;
-} Lock;
-char program_name[255];
-CONFIG config;
-CONNECTION *conn;
+};
+extern struct Lock g_lock;
+extern char program_name[255];
+extern CONFIG config;
+extern CONNECTION *conn;
 
 /* function forwards */
 /* win32.c functions */
